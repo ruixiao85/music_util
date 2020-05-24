@@ -77,14 +77,16 @@ def convert_onefile(indir, subpath, outdir):
   print_run(cmd)
 
 def link_onefile(indir, subpath, outdir):
-  os.link(os.path.join(indir, subpath), make_dir(os.path.join(outdir, subpath))['f'])
+  # os.link(os.path.join(indir, subpath), make_dir(os.path.join(outdir, subpath))['f'])
+  os.system(f"ln -f {os.path.join(indir, subpath)} {make_dir(os.path.join(outdir, subpath))['f']}") # force overwrite
 
 import shutil
 def copy_onefile(indir, subpath, outdir):
   shutil.copy2(os.path.join(indir, subpath), make_dir(os.path.join(outdir, subpath))['f'])
 
-ext2convert=("flac", "ape", "m4a", "oga")
-ext0convert=("mp3", "wma", "ogg", "txt", "jpg", "gif")
+ext2keep=(".txt", ".jpg", ".jpeg", ".gif")
+ext0convert=(".mp3", ".wma", ".ogg")
+ext2convert=(".flac", ".ape", ".m4a", ".oga")
 ffmpeg_setting=" -q:a 1 " # -q:a 0=220~260 1=190~250 2=170~210
 
 if "__main__" == __name__:
@@ -94,17 +96,18 @@ if "__main__" == __name__:
 
   for root, dirs, files in os.walk(indir): # resursive search
     subdir=os.path.relpath(root, indir)
-    cues = [f for f in files if f.endswith(".cue")]
-    if cues: # process cue if any, skip other types
-      for cue in cues:
-        print(f"root {root} file {cue} outdir {outdir}")
-        convert_cue(indir, os.path.join(subdir, cue), outdir)
-    else: # no cue file
-      for f in files:
-        name, ext = os.path.splitext(f)
-        print(f"root {root} file {f} outdir {outdir}")
+    for f in files:
+      subpath=os.path.join(subdir, f)
+      name, ext = os.path.splitext(f)
+      # print(f"subdir [{subdir}] name [{name}] ext [{ext}]")
+      if ext == '.cue':
+        print(f"convert cue [{f}]"); convert_cue(indir, subpath, outdir)
+      elif ext in ext2keep:
+        # print(f"copy file [{f}]")#; copy_onefile(indir, subpath, outdir)
+        print(f"link file [{f}]"); link_onefile(indir, subpath, outdir)
+      elif name+'.cue' not in files: # assume cue and audio file share base name
         if ext in ext2convert:
-          convert_onefile(indir, os.path.join(subdir, f), outdir)
+          print(f"convert file [{f}]"); convert_onefile(indir, subpath, outdir)
         elif ext in ext0convert:
-          link_onefile(indir, os.path.join(subdir, f), outdir)
-          copy_onefile(indir, os.path.join(subdir, f), outdir)
+          # print(f"copy file [{f}]")#; copy_onefile(indir, subpath, outdir)
+          print(f"link file [{f}]"); link_onefile(indir, subpath, outdir)
