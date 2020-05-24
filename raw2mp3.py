@@ -1,42 +1,45 @@
 #!/usr/bin/env python3
-# coding: utf-8
 
 import sys
 import os
-import shutil
 
-# from: https://gist.github.com/bancek/b37b780292540ed2d17d assume cue and target file in the same dir
-def parse_cue(cue_file, outdir):
-  cue_dir = os.path.dirname(cue_file)
-  d = open(cue_file).read().splitlines()
+from pathlib import Path
+def make_dir(target):
+  _dir=os.path.dirname(target)
+  print(f"making directory to [{_dir}]")
+  Path(_dir).mkdir(parents=True, exist_ok=True)
+  return {'f':target, 'd':_dir}
 
+# import subprocess
+def print_run(cmd):
+  print(cmd)
+  os.system(cmd)
+  # subprocess.call(cmd)
+
+def convert_cue(indir, subpath, outdir):
   general = {}
   tracks = []
-  current_file = None
-
-  for line in d:
+  cue_file, audio_file = os.path.join(indir, subpath), None
+  for line in open(cue_file).read().splitlines():
     if line.startswith('REM GENRE '):
       general['genre'] = ' '.join(line.split(' ')[2:]).replace('"', '')
-    if line.startswith('REM DATE '):
+    elif line.startswith('REM DATE '):
       general['date'] = ' '.join(line.split(' ')[2:])
-    if line.startswith('PERFORMER '):
+    elif line.startswith('PERFORMER '):
       general['artist'] = ' '.join(line.split(' ')[1:]).replace('"', '')
-    if line.startswith('TITLE '):
+    elif line.startswith('TITLE '):
       general['album'] = ' '.join(line.split(' ')[1:]).replace('"', '')
-    if line.startswith('FILE '):
-      current_file = ' '.join(line.split(' ')[1:-1]).replace('"', '')
-
-    if line.startswith('  TRACK '):
+    elif line.startswith('FILE '):
+      audio_file = ' '.join(line.split(' ')[1:-1]).replace('"', '')
+    elif line.startswith('  TRACK '):
       track = general.copy()
       track['track'] = int(line.strip().split(' ')[1], 10)
-
       tracks.append(track)
-
-    if line.startswith('    TITLE '):
+    elif line.startswith('    TITLE '):
       tracks[-1]['title'] = ' '.join(line.strip().split(' ')[1:]).replace('"', '')
-    if line.startswith('    PERFORMER '):
+    elif line.startswith('    PERFORMER '):
       tracks[-1]['artist'] = ' '.join(line.strip().split(' ')[1:]).replace('"', '')
-    if line.startswith('    INDEX 01 '):
+    elif line.startswith('    INDEX 01 '):
       #t = map(int, ' '.join(line.strip().split(' ')[2:]).replace('"', '').split(':'))
       t = [int(a) for a in ' '.join(line.strip().split(' ')[2:]).replace('"', '').split(':')]
       tracks[-1]['start'] = 60 * t[0] + t[1] + t[2] / 100.0
@@ -45,7 +48,6 @@ def parse_cue(cue_file, outdir):
     if i != len(tracks) - 1:
       tracks[i]['duration'] = tracks[i + 1]['start'] - tracks[i]['start']
 
-  cmds = []
   for track in tracks:
     metadata = {
       'artist': track['artist'],
@@ -56,51 +58,30 @@ def parse_cue(cue_file, outdir):
     if 'genre' in track: metadata['genre'] = track['genre']
     if 'date' in track: metadata['date'] = track['date']
     cmd = ffmpeg_path
-    cmd += ' -i "%s"' % os.path.join(cue_dir,current_file)
+    cmd += ' -i "%s"' % os.path.join(os.path.dirname(cue_file),audio_file)
     cmd += ffmpeg_setting
     cmd += ' -ss %.2d:%.2d:%.2d' % (track['start'] / 60 / 60, track['start'] / 60 % 60, int(track['start'] % 60))
     if 'duration' in track:
       cmd += ' -t %.2d:%.2d:%.2d' % (track['duration'] / 60 / 60, track['duration'] / 60 % 60, int(track['duration'] % 60))
     cmd += ' ' + ' '.join('-metadata %s="%s"' % (k, v) for (k, v) in metadata.items())
-    # filename = '%s-%s-%.2d.mp3' % (track['artist'].replace(":", "-"), track['title'].replace(":", "-"), track['track'])
-    filename = '%s %.2d. %s.mp3' % (track['album'], track['track'], track['title'].replace(":", "-"))
-    cmd += ' "%s"' % os.path.join(outdir, filename)
-    cmds.append(cmd)
-
-  return cmds
-
-def print_run(cmd):
-  print(cmd)
-  os.system(cmd)
-
-def convert_cue(incue, outdir):
-  cmds = parse_cue(incue, outdir)
-  for cmd in cmds:
+    outsubdir = make_dir(os.path.join(outdir, subpath))['d']
+    basename = '%s %.2d. %s' % (track['album'], track['track'], track['title'].replace(":", "-"))
+    cmd += ' "%s.mp3"' % os.path.join(outsubdir, basename)
     print_run(cmd)
 
-def convert_onefile(infile, outdir):
-  filename = os.path.basename(infile)
-  name, ext = os.path.splitext(filename)
+def convert_onefile(indir, subpath, outdir):
   cmd = '%s' % ffmpeg_path
   cmd += ffmpeg_setting
-  cmd = ' -i "%s"' % infile
-  cmd += ' "%s.mp3"' % os.path.join(outdir, name)
+  cmd = ' -i "%s"' % os.path.join(indir, subpath)
+  cmd += ' "%s.mp3"' % make_dir(os.path.splitext(os.path.join(outdir, subpath))[0])['f']
   print_run(cmd)
-def process_dir(indir, outdir):
-  for root, dirs, files in os.walk(indir): # resursive search
-    cues = [f for f in files if f.endswith(".cue")]
-    if cues: # process cue if any, skip other types
-      for cue in cues:
-        convert_cue(os.path.join(root, cue), outdir)
-    else: # no cue file
-      for f in files:
-        name, ext = os.path.splitext(f)
-        if ext in ext2convert:
-          convert_onefile(os.path.join(root, f), outdir)
-        elif ext in ext0convert:
-          os.link(os.path.join(root, f), os.path.join(outdir, f))
-          # shutil.copy2(os.path.join(root, f), os.path.join(outdir, f))
 
+def link_onefile(indir, subpath, outdir):
+  os.link(os.path.join(indir, subpath), make_dir(os.path.join(outdir, subpath))['f'])
+
+import shutil
+def copy_onefile(indir, subpath, outdir):
+  shutil.copy2(os.path.join(indir, subpath), make_dir(os.path.join(outdir, subpath))['f'])
 
 ext2convert=("flac", "ape", "m4a", "oga")
 ext0convert=("mp3", "wma", "ogg", "txt", "jpg", "gif")
@@ -108,16 +89,22 @@ ffmpeg_setting=" -q:a 1 " # -q:a 0=220~260 1=190~250 2=170~210
 
 if "__main__" == __name__:
   ffmpeg_path=sys.argv[1]
-  indirfile = sys.argv[2]
-  if len(sys.argv) > 3:
-    outdir = sys.argv[3]
-    os.makedirs(outdir, exist_ok=True)
-  else:
-    outdir = ""
+  indir = sys.argv[2]
+  outdir = sys.argv[3]
 
-  if os.path.isdir(indirfile):
-    process_dir(indirfile, outdir)
-  elif indirfile.endswith(".cue"):
-    convert_cue(indirfile, outdir)
-  else:
-    convert_onefile(indirfile, outdir)
+  for root, dirs, files in os.walk(indir): # resursive search
+    subdir=os.path.relpath(root, indir)
+    cues = [f for f in files if f.endswith(".cue")]
+    if cues: # process cue if any, skip other types
+      for cue in cues:
+        print(f"root {root} file {cue} outdir {outdir}")
+        convert_cue(indir, os.path.join(subdir, cue), outdir)
+    else: # no cue file
+      for f in files:
+        name, ext = os.path.splitext(f)
+        print(f"root {root} file {f} outdir {outdir}")
+        if ext in ext2convert:
+          convert_onefile(indir, os.path.join(subdir, f), outdir)
+        elif ext in ext0convert:
+          link_onefile(indir, os.path.join(subdir, f), outdir)
+          copy_onefile(indir, os.path.join(subdir, f), outdir)
