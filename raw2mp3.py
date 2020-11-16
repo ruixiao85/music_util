@@ -59,21 +59,21 @@ def convert_cue(indir, subpath, outdir):
     if 'date' in track: metadata['date'] = track['date']
     cmd = ffmpeg_path
     cmd += ' -i "%s"' % os.path.join(os.path.dirname(cue_file),audio_file)
-    cmd += ffmpeg_setting
+    cmd += ffmpeg_set
     cmd += ' -ss %.2d:%.2d:%.2d' % (track['start'] / 60 / 60, track['start'] / 60 % 60, int(track['start'] % 60))
     if 'duration' in track:
       cmd += ' -t %.2d:%.2d:%.2d' % (track['duration'] / 60 / 60, track['duration'] / 60 % 60, int(track['duration'] % 60))
     cmd += ' ' + ' '.join('-metadata %s="%s"' % (k, v) for (k, v) in metadata.items())
     outsubdir = make_dir(os.path.join(outdir, subpath))['d']
     basename = '%s %.2d. %s' % (track['album'], track['track'], track['title'].replace(":", "-"))
-    cmd += ' "%s.mp3"' % os.path.join(outsubdir, basename)
+    cmd += ' "%s%s"' % (os.path.join(outsubdir, basename), ffmpeg_ext)
     print_run(cmd)
 
 def convert_onefile(indir, subpath, outdir):
   cmd = '%s' % ffmpeg_path
-  cmd += ffmpeg_setting
+  cmd += ffmpeg_set
   cmd = ' -i "%s"' % os.path.join(indir, subpath)
-  cmd += ' "%s.mp3"' % make_dir(os.path.splitext(os.path.join(outdir, subpath))[0])['f']
+  cmd += ' "%s%s"' % (make_dir(os.path.splitext(os.path.join(outdir, subpath))[0])['f'], ffmpeg_ext)
   print_run(cmd)
 
 def link_onefile(indir, subpath, outdir):
@@ -85,9 +85,12 @@ def copy_onefile(indir, subpath, outdir):
   shutil.copy2(os.path.join(indir, subpath), make_dir(os.path.join(outdir, subpath))['f'])
 
 ext2keep=(".txt", ".jpg", ".jpeg", ".gif")
-ext0convert=(".mp3", ".wma", ".ogg")
-ext2convert=(".flac", ".ape", ".m4a", ".oga")
-ffmpeg_setting=" -q:a 1 " # -q:a 0=220~260 1=190~250 2=170~210
+ext0convert=(".mp3", "m4a", ".wma", ".ogg", ".oga")
+ext2convert=(".flac", ".ape", ".wav", ".tta")
+ffmpeg_set,ffmpeg_ext=" -acodec libmp3lame -aq 1",".mp3" # -q:a 0=220~260 1=190~250 2=170~210
+# ffmpeg_set,ffmpeg_ext=" -acodec libmp3lame -b:a 160k",".mp3" # max at 320K
+# ffmpeg_set,ffmpeg_ext=" -c:a libfdk_aac -vbr 5",".m4a" # -vbr 1=20-32 2=32-40 3=48-56 4=64-72 5=96-112
+# ffmpeg_set,ffmpeg_ext=" -c:a aac -b:a 160k",".m4a" # -vbr 1=20-32 2=32-40 3=48-56 4=64-72 5=96-112
 
 if "__main__" == __name__:
   ffmpeg_path=sys.argv[1]
@@ -104,10 +107,11 @@ if "__main__" == __name__:
         print(f"convert cue [{f}]"); convert_cue(indir, subpath, outdir)
       elif ext in ext2keep:
         # print(f"copy file [{f}]")#; copy_onefile(indir, subpath, outdir)
-        print(f"link file [{f}]"); link_onefile(indir, subpath, outdir)
+        print(f"link file [{f}]")#; link_onefile(indir, subpath, outdir)
       elif name+'.cue' not in files: # assume cue and audio file share base name
         if ext in ext2convert:
           print(f"convert file [{f}]"); convert_onefile(indir, subpath, outdir)
         elif ext in ext0convert:
           # print(f"copy file [{f}]")#; copy_onefile(indir, subpath, outdir)
-          print(f"link file [{f}]"); link_onefile(indir, subpath, outdir)
+          print(f"link file [{f}]")#; link_onefile(indir, subpath, outdir)
+
