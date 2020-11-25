@@ -1,9 +1,10 @@
 #!/bin/env python
 from pathlib import Path
 import os
-limit=20
-nbands=18
-bands=[55,77,110,156,220,311,440,622,880,1200,1800,2500,3500,5000,7000,10000,14000,20000] # display
+limit=12
+nbands=31
+bands=[20,25,31.5,40,50,63,80,100,125,160,200,250,315,400,500,630,800,1000,
+  1250,1600,2000,2500,3150,4000,5000,6300,8000,10000,12500,16000,20000] # 31 Graphic Equalizer
 
 def parse_integer(value: str, default: int=0) -> int:
   try:
@@ -30,11 +31,11 @@ def band_left(folder: str, ext: str=".csv")-> []:
       lf=cf; lv=cv
   return ad
 
-# round(log(fq/55,base=1.414)) in [0,1,...,17]
+# round(log(fq/20.0,base=2**0.3333)) in [0,1,...,30]
 import math
 def freq_int_wt(fq:float)->(int,float):
-  fi=math.log(fq/55.0,1.414); fir=round(fi)
-  if 0<=fir<=17: return (fir,1.0-abs(fir-fi))
+  fi=math.log(fq/20.0,2**0.33333); fir=round(fi)
+  if 0<=fir<=30: return (fir,1.0-abs(fir-fi))
   return (None,0)
 def band_int_round(folder: str, ext: str=".csv")-> []:
   files=[f for f in os.listdir(folder) if f.endswith(ext)]
@@ -64,10 +65,15 @@ get_freq_resp=band_int_round
 def clean_name(file: str)-> str:
   return file.replace("-","").replace(" ","").lower()
 
+import binascii
+prehex='66 6F 6F 5F 64 73 70 5F 78 67 65 71 0D 0A 31 0D 0A 76 3A 0C E7 A7 88 9F 41 A2 EA B0 0C 3A 9A C7 42 16 01 00 00 03 00 00 00 00 00 00 00 02 00 00 00 00 00 00 00 00 1F 00 00 00'.replace(' ','')
+posthex='00 00 00 00 01 1F 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00'.replace(' ','')
+
 # myHps=["Audio-Technica ATH-W5000","Sennheiser HD 600", "Sennheiser HD 800","AKG K701"]
 # myHps=["Audio-Technica ATH-W5000"]
 myHps=["Sennheiser HD 800","AKG K701"]
 myHpsClean=[clean_name(hp) for hp in myHps]
+# myBrands=["AKG"]
 myBrands=["Audio-Technica","Audeze","AKG","Beyerdynamic","Bose","Bowers","Denon","E-Mu","Focal","Fostex","Grado","HiFiMAN",
   "Massdrop","Meze","Monoprice","Monster","MrSpeakers","Oppo","Pioneer","Polk","Sennheiser","Shure","Sony","Stax","Ultrasone","ZMF"]
 myBrandsClean=[clean_name(b) for b in myBrands]
@@ -84,7 +90,11 @@ for sourceDir in ["headphonecom", "innerfidelity", "oratory1990"]:
           if clean_name(hpt.split(" ")[0]) in myBrandsClean and clean_name(hpt) not in myHpsClean:
             ft=get_freq_resp(f"{sourceDir}/data/onear/{hpt}")
             for ratio in [0.6,1.0]:
-              with open(f'{sourceDir}~{hpc}/{hpt}~{ratio}.feq'.replace(" ",""),"w") as f:
+              with open(f'{sourceDir}~{hpc}/{hpt}~{ratio}.xgeq'.replace(" ",""),"wb") as f:
+                f.write(binascii.unhexlify(prehex))
                 for a,b in zip(fc,ft):
-                  f.write(f'{max(-1*limit,min(limit,round((b-a)*ratio)))}\n')
+                  adj=round(10*max(-1*limit,min(limit,(b-a)*ratio)))*10
+                  f.write((adj).to_bytes(4,byteorder='little',signed=True))
+                f.write(binascii.unhexlify(posthex))
+                  # f.write(f'{max(-1*limit,min(limit,round((b-a)*ratio)))}\n')
             # exit(1) # debug one case
