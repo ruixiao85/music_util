@@ -30,11 +30,11 @@ def band_left(folder: str, ext: str=".csv")-> []:
       lf=cf; lv=cv
   return ad
 
-# round(log(fq/55,base=1.414)) in [0,1,...,17]
+# round(log(fq/55,base=1.414)) in [0,1,...,nbands-1]
 import math
 def freq_int_wt(fq:float)->(int,float):
   fi=math.log(fq/55.0,1.414); fir=round(fi)
-  if 0<=fir<=17: return (fir,1.0-abs(fir-fi))
+  if 0<=fir<nbands: return (fir,1.0-abs(fir-fi))
   return (None,0)
 def band_int_round(folder: str, ext: str=".csv")-> []:
   files=[f for f in os.listdir(folder) if f.endswith(ext)]
