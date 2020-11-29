@@ -15,20 +15,27 @@ class FreqResp(object):
 
   @staticmethod
   def resamp_fr(_raw_fr:list,_nr:int)->list:
-    _res_fr=[]; ci=0 # [0, 1, ...,  _nr-1]
-    f0,r0=_raw_fr[0]; f1,r1=_raw_fr[-1] # extract begin and end
-    _raw_fr.insert(0,(min(10,f0-10),r0)); _raw_fr.append((max(21000,f1+1000),r1)) # pad raw_fr
-    for (rf,rr) in _raw_fr:
+    lf,lr=_raw_fr[0]; ef,er=_raw_fr[-1] # extract begin and end
+    _raw_fr.insert(0,(min(10,lf-10),lr)); _raw_fr.append((max(21000,ef+1000),er)) # pad raw_fr
+    lf,lr=_raw_fr[0] # last -> pad #0
+    # print(f"raw freq resp with padding: {_raw_fr}")
+    rn=len(_raw_fr); ri=1 # n of raw bands, raw idx start from 1
+    _res_fr=[]; ci=0 # [0, 1, ...,  _nr-1] cur-idx
+    while ri<rn and ci<_nr:
       cf=pow(1000.0,ci/(_nr-1))*20.0
-      if rf>=cf: # add
+      (rf,rr)=_raw_fr[ri]
+      if cf<rf: # add
         logcf=math.log(cf/20.0,1000.0)
         lw,rw=math.fabs(math.log(lf/20.0,1000.0)-logcf),math.fabs(math.log(rf/20.0,1000.0)-logcf)
         cr=(lr*rw+rr*lw)/(lw+rw) # reversed weights to emphasize closer value
+        # print(f"left {lf} : {lr} x {rw:.2f} right {rf} : {rr} x {lw:.2f} current {cf} : {cr:.2f}")
         _res_fr.append((cf,cr))
-        if ci<_nr-1: ci+=1
-        else: break
-      lf,lr=rf,rr # try next set of fr
+        ci+=1
+      else:
+        ri+=1
+        lf,lr=rf,rr # try next set of fr
     _raw_fr.pop(0); _raw_fr.pop() # trim both ends of ref list
+    # print(f"res freq resp: {_res_fr}")
     return _res_fr
 
   @staticmethod
@@ -52,9 +59,9 @@ class FreqResp(object):
       for line in f:
         cols=line.split(sep)
         cf=valid_float(cols[0], lambda x: 20<=x<=20000) # current frequency
-        if cf: # freq valid
+        if cf is not None: # freq valid
           cr=valid_float(cols[1], lambda x: -99<=x<=99) # current response
-          if cr: # resp valid
+          if cr is not None: # resp valid
             _raw_fr.append((cf,cr))
     if nr==len(_raw_fr):
       return cls(None,_raw_fr,nr) # most likely preprocessed
@@ -101,31 +108,39 @@ class FreqResp(object):
 if __name__ == "__main__":
   import os
   myHpType="onear"
-  anchor="Sennheiser HD 800 S"
 
-  os.makedirs(anchor,exist_ok=True)
-  # for sourceDir in ["headphonecom", "innerfidelity", "oratory1990"]:
-  for sourceDir in ["innerfidelity", "oratory1990"]:
-  # for sourceDir in [ "oratory1990"]:
-    rootpath=f"AutoEq/measurements/{sourceDir}/data/{myHpType}"
-    hpa=FreqResp.from_csv(f"{rootpath}/{anchor}/{anchor}.csv")
-    for dirpath,dirnames,filenames in os.walk(rootpath):
-      for dirname in dirnames:
-        # print(dirpath,dirname)
-        try:
-          hpt=FreqResp.from_csv(f"{dirpath}/{dirname}/{dirname}.csv")
-          hpd=FreqResp.res_adjust(hpa,hpt) # diff
-          hpd.res_to_csv(f"{anchor}/{dirname}_{sourceDir}.csv")
-        except: pass
+  anchor="Sennheiser HD 800"
+  # anchor="Sennheiser HD 800 S"
+  if False:
+    os.makedirs(anchor,exist_ok=True)
+    # for sourceDir in ["headphonecom", "innerfidelity", "oratory1990"]:
+    for sourceDir in ["innerfidelity", "oratory1990"]:
+    # for sourceDir in [ "oratory1990"]:
+      rootpath=f"AutoEq/measurements/{sourceDir}/data/{myHpType}"
+      hpa=FreqResp.from_csv(f"{rootpath}/{anchor}/{anchor}.csv")
+      for dirpath,dirnames,filenames in os.walk(rootpath):
+        for dirname in dirnames:
+          # print(dirpath,dirname)
+          try:
+            hpt=FreqResp.from_csv(f"{dirpath}/{dirname}/{dirname}.csv")
+            # print(hpt.raw_fr); print(hpt.res_fr)
+            hpd=FreqResp.res_adjust(hpa,hpt) # diff
+            hpd.res_to_csv(f"{anchor}/{dirname}_{sourceDir}.csv")
+          except: pass
 
   myHps=[
-  "AKG K701_innerfidelity_res",
-  "AKG K701_oratory1990_res",
-  "Audio-Technica ATH-W5000 2013_innerfidelity_res",
-  "Audio-Technica ATH-W5000_innerfidelity_res",
-  "Sennheiser HD 800_innerfidelity_res",
-  "Sennheiser HD 800_oratory1990_res",
-  "Sennheiser IE 800_oratory1990_res"]
+  # "AT897pos_innerfidelity_res",
+  # "AT897pos_oratory1990_res",
+  "AT897neg_innerfidelity_res",
+  "AT897neg_oratory1990_res",
+  # "AKG K701_innerfidelity_res",
+  # "AKG K701_oratory1990_res",
+  # "Audio-Technica ATH-W5000 2013_innerfidelity_res",
+  # "Audio-Technica ATH-W5000_innerfidelity_res",
+  # "Sennheiser HD 800_innerfidelity_res",
+  # "Sennheiser HD 800_oratory1990_res",
+  # "Sennheiser IE 800_oratory1990_res"
+  ]
   for hp in myHps:
     hpc=FreqResp.from_csv(f"{anchor}/{hp}.csv")
     os.makedirs(f"{anchor}/{hp}",exist_ok=True)
@@ -137,5 +152,4 @@ if __name__ == "__main__":
           hpd=FreqResp.res_adjust(hpc,hpt) # diff
           for ratio in [0.6,1.0]:
             hpd.res_to_xgeq(f"{anchor}/{hp}/{filename}.csv",ratio)
-
 
